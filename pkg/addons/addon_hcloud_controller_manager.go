@@ -53,20 +53,10 @@ func (addon *HCloudControllerManagerAddon) URL() string {
 
 // Install performs all steps to install the addon
 func (addon *HCloudControllerManagerAddon) Install(args ...string) {
-	// set external cloud provider
-	config := `
-[Service]
-Environment="KUBELET_EXTRA_ARGS=--cloud-provider=external"
-`
-	for _, node := range addon.nodes {
-		err := addon.communicator.WriteFile(node, "/etc/systemd/system/kubelet.service.d/20-hcloud.conf", config, false)
-		FatalOnError(err)
 
-		_, err = addon.communicator.RunCmd(node, "systemctl daemon-reload && systemctl restart kubelet")
-		FatalOnError(err)
-	}
-
-	_, err := addon.communicator.RunCmd(*addon.masterNode, `kubectl -n kube-system patch ds kube-flannel-ds --type json -p '[{"op":"add","path":"/spec/template/spec/tolerations/-","value":{"key":"node.cloudprovider.kubernetes.io/uninitialized","value":"true","effect":"NoSchedule"}}]'`)
+	_, err := addon.communicator.RunCmd(*addon.masterNode, "kubectl taint node --all node.cloudprovider.kubernetes.io/uninitialized=true:NoSchedule")
+	FatalOnError(err)
+	_, err = addon.communicator.RunCmd(*addon.masterNode, `kubectl -n kube-system patch ds canal --type json -p '[{"op":"add","path":"/spec/template/spec/tolerations/-","value":{"key":"node.cloudprovider.kubernetes.io/uninitialized","value":"true","effect":"NoSchedule"}}]'`)
 	FatalOnError(err)
 	_, err = addon.communicator.RunCmd(*addon.masterNode, fmt.Sprintf("kubectl -n kube-system create secret generic hcloud --from-literal=token=%s", addon.provider.Token()))
 	FatalOnError(err)
